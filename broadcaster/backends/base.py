@@ -1,12 +1,9 @@
 from typing import Any
 
-from .._base import Event
+from broadcaster.event import Event
 
 
 class BroadcastBackend:
-    def __init__(self, url: str) -> None:
-        raise NotImplementedError()
-
     async def connect(self) -> None:
         raise NotImplementedError()
 

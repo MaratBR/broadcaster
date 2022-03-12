@@ -1,12 +1,13 @@
 import asyncio
 import typing
 
-from .._base import Event
+from broadcaster.event import Event
+
 from .base import BroadcastBackend
 
 
 class MemoryBackend(BroadcastBackend):
-    def __init__(self, url: str):
+    def __init__(self) -> None:
         self._subscribed: typing.Set = set()
 
     async def connect(self) -> None:

@@ -1,55 +1,60 @@
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, AsyncIterator, Dict, Optional
+from typing import Any, AsyncGenerator, AsyncIterator, Dict, Optional, Type, Union
 from urllib.parse import urlparse
 
+from broadcaster.backends.base import BroadcastBackend
+from broadcaster.encoder import MessageEncoder
 
-class Event:
-    def __init__(self, channel: str, message: str) -> None:
-        self.channel = channel
-        self.message = message
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            isinstance(other, Event)
-            and self.channel == other.channel
-            and self.message == other.message
-        )
-
-    def __repr__(self) -> str:
-        return f"Event(channel={self.channel!r}, message={self.message!r})"
+from .event import Event
 
 
 class Unsubscribed(Exception):
     pass
 
 
+def _infer_backend(url: str) -> BroadcastBackend:
+    parsed_url = urlparse(url)
+
+    if parsed_url.scheme == "redis":
+        from broadcaster.backends.redis import RedisBackend
+
+        return RedisBackend(url)
+
+    elif parsed_url.scheme in ("postgres", "postgresql"):
+        from broadcaster.backends.postgres import PostgresBackend
+
+        return PostgresBackend(url)
+
+    if parsed_url.scheme == "kafka":
+        from broadcaster.backends.kafka import KafkaBackend
+
+        return KafkaBackend(url)
+
+    elif parsed_url.scheme == "memory":
+        from broadcaster.backends.memory import MemoryBackend
+
+        return MemoryBackend()
+    raise ValueError(f"Invalid/unsupported url: {url}")
+
+
 class Broadcast:
-    def __init__(self, url: str):
-        from broadcaster._backends.base import BroadcastBackend
+    _backend: BroadcastBackend
 
-        parsed_url = urlparse(url)
-        self._backend: BroadcastBackend
+    def __init__(
+        self,
+        backend: Union[str, BroadcastBackend, Type[BroadcastBackend]],
+        encoder: Optional[MessageEncoder] = None,
+    ):
+        if isinstance(backend, str):
+            self._backend = _infer_backend(backend)
+        elif isinstance(backend, BroadcastBackend):
+            self._backend = backend
+        else:
+            # assume it has no arguments
+            self._backend = backend()
         self._subscribers: Dict[str, Any] = {}
-        if parsed_url.scheme == "redis":
-            from broadcaster._backends.redis import RedisBackend
-
-            self._backend = RedisBackend(url)
-
-        elif parsed_url.scheme in ("postgres", "postgresql"):
-            from broadcaster._backends.postgres import PostgresBackend
-
-            self._backend = PostgresBackend(url)
-
-        if parsed_url.scheme == "kafka":
-            from broadcaster._backends.kafka import KafkaBackend
-
-            self._backend = KafkaBackend(url)
-
-        elif parsed_url.scheme == "memory":
-            from broadcaster._backends.memory import MemoryBackend
-
-            self._backend = MemoryBackend(url)
+        self._encoder = encoder
 
     async def __aenter__(self) -> "Broadcast":
         await self.connect()
@@ -72,10 +77,16 @@ class Broadcast:
     async def _listener(self) -> None:
         while True:
             event = await self._backend.next_published()
+            if self._encoder:
+                event = Event(
+                    channel=event.channel, message=self._encoder.decode(event.message)
+                )
             for queue in list(self._subscribers.get(event.channel, [])):
                 await queue.put(event)
 
     async def publish(self, channel: str, message: Any) -> None:
+        if self._encoder:
+            message = self._encoder.encode(message)
         await self._backend.publish(channel, message)
 
     @asynccontextmanager
@@ -85,7 +96,7 @@ class Broadcast:
         try:
             if not self._subscribers.get(channel):
                 await self._backend.subscribe(channel)
-                self._subscribers[channel] = set([queue])
+                self._subscribers[channel] = {queue}
             else:
                 self._subscribers[channel].add(queue)
 
@@ -100,8 +111,11 @@ class Broadcast:
 
 
 class Subscriber:
-    def __init__(self, queue: asyncio.Queue) -> None:
+    def __init__(
+        self, queue: asyncio.Queue, encoder: Optional[MessageEncoder] = None
+    ) -> None:
         self._queue = queue
+        self._encoder = encoder
 
     async def __aiter__(self) -> Optional[AsyncGenerator]:
         try:

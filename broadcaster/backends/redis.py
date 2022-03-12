@@ -3,7 +3,8 @@ from urllib.parse import urlparse
 
 import asyncio_redis
 
-from .._base import Event
+from broadcaster.event import Event
+
 from .base import BroadcastBackend
 
 
