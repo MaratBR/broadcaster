@@ -117,7 +117,7 @@ class Subscriber:
         self._queue = queue
         self._encoder = encoder
 
-    async def __aiter__(self) -> Optional[AsyncGenerator]:
+    async def __aiter__(self) -> AsyncGenerator:
         try:
             while True:
                 yield await self.get()

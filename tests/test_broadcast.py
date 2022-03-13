@@ -1,6 +1,7 @@
 from typing import Any
 
 import pytest
+from async_timeout import timeout
 
 from broadcaster import Broadcast
 from broadcaster.backends.aio_redis import AIORedisBackend
@@ -9,6 +10,17 @@ from broadcaster.backends.memory import MemoryBackend
 from broadcaster.backends.postgres import PostgresBackend
 from broadcaster.backends.redis import RedisBackend
 from broadcaster.encoder import MessageEncoder
+
+
+def with_timeout(t):
+    def wrapper(coro):
+        async def run(*args, **kwargs):
+            async with timeout(t):
+                return await coro(*args, **kwargs)
+
+        return run
+
+    return wrapper
 
 
 @pytest.mark.asyncio
@@ -115,6 +127,7 @@ async def test_postgres_directly():
 
 
 @pytest.mark.asyncio
+@with_timeout(4)
 async def test_kafka():
     async with Broadcast("kafka://localhost:9092") as broadcast:
         async with broadcast.subscribe("chatroom") as subscriber:
@@ -125,6 +138,7 @@ async def test_kafka():
 
 
 @pytest.mark.asyncio
+@with_timeout(4)
 async def test_kafka_directly():
     async with Broadcast(KafkaBackend("kafka://localhost:9092")) as broadcast:
         async with broadcast.subscribe("chatroom") as subscriber:

@@ -1,4 +1,6 @@
 class Event:
+    __slots__ = ("channel", "message")
+
     def __init__(self, channel: str, message: str) -> None:
         self.channel = channel
         self.message = message
