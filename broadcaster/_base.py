@@ -16,10 +16,10 @@ class Unsubscribed(Exception):
 def _infer_backend(url: str) -> BroadcastBackend:
     parsed_url = urlparse(url)
 
-    if parsed_url.scheme == "redis":
-        from broadcaster.backends.redis import RedisBackend
+    if parsed_url.scheme in ("redis", "rediss"):
+        from broadcaster.backends.aio_redis import AIORedisBackend
 
-        return RedisBackend(url)
+        return AIORedisBackend(url)
 
     elif parsed_url.scheme in ("postgres", "postgresql"):
         from broadcaster.backends.postgres import PostgresBackend
@@ -77,7 +77,7 @@ class Broadcast:
     async def _listener(self) -> None:
         while True:
             event = await self._backend.next_published()
-            if self._encoder:
+            if self._encoder and event is not None:
                 event = Event(
                     channel=event.channel, message=self._encoder.decode(event.message)
                 )

@@ -51,7 +51,8 @@ setup(
         "redis": ["asyncio-redis"],
         "postgres": ["asyncpg"],
         "kafka": ["aiokafka"],
-        "test": ["pytest", "pytest-asyncio"]
+        "test": ["pytest", "pytest-asyncio"],
+        "aioredis": ["aioredis"]
     },
     classifiers=[
         "Development Status :: 3 - Alpha",

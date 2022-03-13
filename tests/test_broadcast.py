@@ -3,6 +3,7 @@ from typing import Any
 import pytest
 
 from broadcaster import Broadcast
+from broadcaster.backends.aio_redis import AIORedisBackend
 from broadcaster.backends.kafka import KafkaBackend
 from broadcaster.backends.memory import MemoryBackend
 from broadcaster.backends.postgres import PostgresBackend
@@ -71,6 +72,16 @@ async def test_redis():
 
 @pytest.mark.asyncio
 async def test_redis_directly():
+    async with Broadcast(AIORedisBackend("redis://localhost:6379")) as broadcast:
+        async with broadcast.subscribe("chatroom") as subscriber:
+            await broadcast.publish("chatroom", "hello")
+            event = await subscriber.get()
+            assert event.channel == "chatroom"
+            assert event.message == "hello"
+
+
+@pytest.mark.asyncio
+async def test_asyncio_redis_directly():
     async with Broadcast(RedisBackend("redis://localhost:6379")) as broadcast:
         async with broadcast.subscribe("chatroom") as subscriber:
             await broadcast.publish("chatroom", "hello")
